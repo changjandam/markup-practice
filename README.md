@@ -12,3 +12,7 @@ You can markup a text in paragraph with different colors.
 2. run `npm install`
 3. run `npm start`
 4. open `http://localhost:3000` in your browser
+
+or
+
+take a look [here](https://changjandam.github.io/markup-practice/)
