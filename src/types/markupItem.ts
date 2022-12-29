@@ -3,6 +3,7 @@ interface MarkupItem {
   position: [number, number];
   comment: string;
   color: string;
+  backgroundColor: string;
 }
 
 export default MarkupItem;

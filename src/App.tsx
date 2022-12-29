@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import MarkupItem from './types/markupItem';
+import type MarkupItem from './types/markupItem';
 import lorem from './loremText';
 
 const Main = styled.main`
@@ -36,29 +36,22 @@ const initPosition = {
 };
 
 function App() {
-  const [markup, setMarkup] = useState<React.ReactNode[]>([]);
+  const [content, setContent] = useState<React.ReactNode[]>([]);
+  const [markups, setMarkups] = useState<MarkupItem[]>([]);
   const [showLorem, setShowLorem] = useState(false);
   const [buttonPosition, setButtonPosition] = useState<{
     top: number;
     left: number;
     show: boolean;
   }>(initPosition);
+  const [showSelection, setShowSelection] = useState(false);
 
   useEffect(() => {
-    setMarkup([lorem]);
+    setContent([lorem]);
   }, []);
 
   const handleMouseUp = (e: React.MouseEvent<HTMLParagraphElement>) => {
     const selection = window.getSelection();
-    if (selection) {
-      console.log({
-        start: selection.anchorOffset,
-        end: selection.focusOffset,
-        text: selection.toString(),
-        e,
-        selection,
-      });
-    }
     if (selection?.type === 'Range') {
       setButtonPosition({
         top: e.clientY + 10,
@@ -71,23 +64,49 @@ function App() {
     }
   };
 
-  const handleMark = () => {
-    const text = lorem;
+  const handleMark = useCallback(() => {
     const selection = window.getSelection();
     if (selection) {
-      const start = selection.anchorOffset;
-      const end = selection.focusOffset;
-      const markedText = selection.toString();
-      const before = text.slice(0, start);
-      const after = text.slice(end);
-      const marked = (
-        <span style={{ backgroundColor: 'yellow' }}>{markedText}</span>
+      const position = [selection.anchorOffset, selection.focusOffset].sort(
+        (a, b) => a - b
+      ) as [number, number];
+      setMarkups((prev) =>
+        [
+          ...prev,
+          {
+            text: selection.toString(),
+            position,
+            comment: '',
+            color: 'black',
+            backgroundColor: 'yellow',
+          },
+        ].sort((a, b) => b.position[0] - a.position[0])
       );
-      setMarkup([before, marked, after]);
       setButtonPosition(initPosition);
       setShowLorem(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    console.log({ markups });
+    setContent(() => {
+      let newContent: React.ReactNode[] = [lorem];
+      markups.forEach((markup) => {
+        const lastContent = newContent?.shift();
+        if (typeof lastContent === 'string') {
+          const [start, end] = markup.position;
+          const { text, color, backgroundColor } = markup;
+          const before = lastContent.slice(0, start);
+          const after = lastContent.slice(end);
+          const marked = <span style={{ color, backgroundColor }}>{text}</span>;
+          newContent = [before, marked, after, ...newContent];
+        }
+      });
+      return newContent;
+    });
+  }, [markups]);
+
+  console.log({ content });
 
   return (
     <Main
@@ -96,7 +115,7 @@ function App() {
       }
     >
       <Article onMouseDown={() => setShowLorem(true)} onMouseUp={handleMouseUp}>
-        {showLorem ? lorem : markup}
+        {showLorem ? lorem : content}
       </Article>
       {buttonPosition.show && (
         <MarkupButton
@@ -106,6 +125,27 @@ function App() {
         >
           Mark
         </MarkupButton>
+      )}
+      {showSelection && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <div>
+            <button>prev</button>
+            <button>new</button>
+            <button>combine</button>
+          </div>
+        </div>
       )}
     </Main>
   );
