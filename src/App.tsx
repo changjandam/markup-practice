@@ -22,33 +22,27 @@ const Article = styled.article`
   overflow-y: auto;
 `;
 
-const OptionMask = styled.div`
+const Tools = styled.div<{ top: number; left: number }>`
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  top: ${(props: { top: number }) => props.top}px;
+  left: ${(props: { left: number }) => props.left}px;
+  padding: 1px;
+  background-color: #000;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  gap: 1px;
 `;
 
-const Option = styled.div`
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 10px;
-  display: flex;
-  gap: 10px;
+const ToolButton = styled.button`
+  border: none;
 `;
+
+type Content = { content: string; color: string; type: 'content' | 'markup' };
 
 function App() {
-  const [contents, setContents] = useState<
-    { content: string; color: string; type: 'content' | 'markup' }[]
-  >([
+  const [contents, setContents] = useState<Content[]>([
     {
       content: lorem,
-      color: '#000',
+      color: '#fff',
       type: 'content',
     },
   ]);
@@ -60,11 +54,11 @@ function App() {
     x: number;
     y: number;
   } | null>(null);
-  const [hasConflict, setHasConflict] = useState(true);
+  const [hasConflict, setHasConflict] = useState(false);
   const [dealWithConflict, setDealWithConflict] = useState<
     'merge' | 'keepNew' | null
   >(null);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
   const reset = useCallback(() => {
@@ -72,43 +66,101 @@ function App() {
     setMarkupStart(null);
     setHasConflict(false);
     setDealWithConflict(null);
-    setShowConfirm(false);
+    setShowTools(false);
     setConfirm(false);
     setMousePosition(null);
   }, []);
 
-  const handleMarkup = useCallback(
-    (index: number) => {
-      if (markupStart === null) return;
-      const currentRelatedContents = contents.slice(markupStart, index + 1);
-      setRelatedContents(currentRelatedContents);
-      const hasConflict = currentRelatedContents.some(
-        (item) => item.type === 'markup'
-      );
-      if (hasConflict) {
-        setHasConflict(true);
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLElement, MouseEvent>) => {
+      const selection = window.getSelection();
+      console.log({ e, selection });
+      if (markupStart === null) {
+        return;
+      }
+      if (selection?.toString()) {
+        setMousePosition({ x: e.clientX, y: e.clientY });
+        const index = Number(e.currentTarget.dataset.contentIndex);
+        const currentRelatedContents = contents.slice(markupStart, index + 1);
+        console.log({ markupStart, index, contents });
+        setRelatedContents(currentRelatedContents);
+        console.log({ currentRelatedContents });
+        const hasConflict = currentRelatedContents.some(
+          (item) => item.type === 'markup'
+        );
+        if (hasConflict) {
+          setHasConflict(true);
+        }
+        setShowTools(true);
       } else {
-        setShowConfirm(true);
+        reset();
       }
     },
-    [contents, markupStart]
+    [contents, markupStart, reset]
   );
 
   const handleConflict = useCallback((method: typeof dealWithConflict) => {
     setDealWithConflict(method);
-    setShowConfirm(true);
   }, []);
 
-  const finishMarkup = useCallback(() => {}, []);
+  const finishMarkup = useCallback(() => {
+    if (!relatedContents) {
+      return;
+    }
+    const selection = getSelection();
+    if (!selection) {
+      return;
+    }
+    setContents((prev) => {
+      let newContents = [...prev];
+      if (hasConflict) {
+      } else {
+        const currentContent = relatedContents[0];
+        console.log({
+          currentContent,
+          relatedContents,
+          newContents,
+        });
+        const newMarkup: Content = {
+          content: selection.toString(),
+          color: 'yellow',
+          type: 'markup',
+        };
+        const beforeMarkupContent: Content = {
+          type: 'content',
+          content: currentContent?.content.slice(0, selection.anchorOffset),
+          color: '#fff',
+        };
+        const afterMarkupContent: Content = {
+          content: currentContent?.content.slice(selection.focusOffset),
+          color: '#fff',
+          type: 'content',
+        };
+        console.log({
+          beforeMarkupContent,
+          newMarkup,
+          afterMarkupContent,
+        });
+        newContents.splice(
+          markupStart || 0,
+          relatedContents.length,
+          beforeMarkupContent,
+          newMarkup,
+          afterMarkupContent
+        );
+      }
+      return newContents;
+    });
+    reset();
+  }, [hasConflict, markupStart, relatedContents, reset]);
+
+  console.log({ contents });
 
   useEffect(() => {
     if (!relatedContents) {
       return;
     }
-    if (hasConflict) {
-      return;
-    }
-    if (!dealWithConflict) {
+    if (hasConflict && !dealWithConflict) {
       return;
     }
     if (confirm) {
@@ -122,22 +174,32 @@ function App() {
         {contents.map((item, index) => (
           <span
             key={index}
-            style={{ color: item.color }}
+            style={{ background: item.color }}
             onMouseDown={() => setMarkupStart(index)}
-            onMouseUp={() => handleMarkup(index)}
+            onMouseUp={(e) => handleMouseUp(e)}
+            data-content-index={index}
           >
             {item.content}
           </span>
         ))}
       </Article>
-      {hasConflict && (
-        <OptionMask>
-          <Option>
-            <button onClick={() => handleConflict('merge')}>合併</button>
-            <button onClick={() => handleConflict('keepNew')}>保留最新</button>
-            <button onClick={reset}>取消</button>
-          </Option>
-        </OptionMask>
+      {showTools && (
+        <Tools top={mousePosition?.y || 0} left={mousePosition?.x || 0}>
+          {hasConflict && (
+            <>
+              <ToolButton onClick={() => handleConflict('merge')}>
+                Merge
+              </ToolButton>
+              <ToolButton onClick={() => handleConflict('keepNew')}>
+                Keep New
+              </ToolButton>
+              <ToolButton onClick={reset}>Cancel</ToolButton>
+            </>
+          )}
+          {!hasConflict && (
+            <ToolButton onClick={() => setConfirm(true)}>confirm</ToolButton>
+          )}
+        </Tools>
       )}
     </Main>
   );
