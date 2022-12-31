@@ -16,3 +16,11 @@ You can markup a text in paragraph with different colors.
 or
 
 take a look [here](https://changjandam.github.io/markup-practice/)
+
+## how to use
+
+1. highlight a text in paragraph
+2. click confirm button
+3. you can see the text is marked with different colors
+
+if a marked text is contained in new highlight range, the old mark will be removed.
