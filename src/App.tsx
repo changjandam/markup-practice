@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import type MarkupItem from './types/markupItem';
 import lorem from './loremText';
 
 const Main = styled.main`
@@ -14,7 +13,7 @@ const Main = styled.main`
 `;
 
 const Article = styled.article`
-  max-width: 600px;
+  width: 600px;
   max-height: 600px;
   padding: 20px;
   background-color: #fff;
@@ -23,129 +22,122 @@ const Article = styled.article`
   overflow-y: auto;
 `;
 
-const MarkupButton = styled.button<{ top: number; left: number }>`
+const OptionMask = styled.div`
   position: absolute;
-  top: ${({ top }) => top}px;
-  left: ${({ left }) => left}px;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
 `;
 
-const initPosition = {
-  top: 0,
-  left: 0,
-  show: false,
-};
+const Option = styled.div`
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+`;
 
 function App() {
-  const [content, setContent] = useState<React.ReactNode[]>([]);
-  const [markups, setMarkups] = useState<MarkupItem[]>([]);
-  const [showLorem, setShowLorem] = useState(false);
-  const [buttonPosition, setButtonPosition] = useState<{
-    top: number;
-    left: number;
-    show: boolean;
-  }>(initPosition);
-  const [showSelection, setShowSelection] = useState(false);
+  const [contents, setContents] = useState<
+    { content: string; color: string; type: 'content' | 'markup' }[]
+  >([
+    {
+      content: lorem,
+      color: '#000',
+      type: 'content',
+    },
+  ]);
+  const [relatedContents, setRelatedContents] = useState<
+    typeof contents | null
+  >(null);
+  const [markupStart, setMarkupStart] = useState<number | null>(null);
+  const [mousePosition, setMousePosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [hasConflict, setHasConflict] = useState(true);
+  const [dealWithConflict, setDealWithConflict] = useState<
+    'merge' | 'keepNew' | null
+  >(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirm, setConfirm] = useState(false);
 
-  useEffect(() => {
-    setContent([lorem]);
+  const reset = useCallback(() => {
+    setRelatedContents(null);
+    setMarkupStart(null);
+    setHasConflict(false);
+    setDealWithConflict(null);
+    setShowConfirm(false);
+    setConfirm(false);
+    setMousePosition(null);
   }, []);
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLParagraphElement>) => {
-    const selection = window.getSelection();
-    if (selection?.type === 'Range') {
-      setButtonPosition({
-        top: e.clientY + 10,
-        left: e.clientX,
-        show: true,
-      });
-    } else {
-      setButtonPosition(initPosition);
-      setShowLorem(false);
-    }
-  };
-
-  const handleMark = useCallback(() => {
-    const selection = window.getSelection();
-    if (selection) {
-      const position = [selection.anchorOffset, selection.focusOffset].sort(
-        (a, b) => a - b
-      ) as [number, number];
-      setMarkups((prev) =>
-        [
-          ...prev,
-          {
-            text: selection.toString(),
-            position,
-            comment: '',
-            color: 'black',
-            backgroundColor: 'yellow',
-          },
-        ].sort((a, b) => b.position[0] - a.position[0])
+  const handleMarkup = useCallback(
+    (index: number) => {
+      if (markupStart === null) return;
+      const currentRelatedContents = contents.slice(markupStart, index + 1);
+      setRelatedContents(currentRelatedContents);
+      const hasConflict = currentRelatedContents.some(
+        (item) => item.type === 'markup'
       );
-      setButtonPosition(initPosition);
-      setShowLorem(false);
-    }
+      if (hasConflict) {
+        setHasConflict(true);
+      } else {
+        setShowConfirm(true);
+      }
+    },
+    [contents, markupStart]
+  );
+
+  const handleConflict = useCallback((method: typeof dealWithConflict) => {
+    setDealWithConflict(method);
+    setShowConfirm(true);
   }, []);
 
-  useEffect(() => {
-    console.log({ markups });
-    setContent(() => {
-      let newContent: React.ReactNode[] = [lorem];
-      markups.forEach((markup) => {
-        const lastContent = newContent?.shift();
-        if (typeof lastContent === 'string') {
-          const [start, end] = markup.position;
-          const { text, color, backgroundColor } = markup;
-          const before = lastContent.slice(0, start);
-          const after = lastContent.slice(end);
-          const marked = <span style={{ color, backgroundColor }}>{text}</span>;
-          newContent = [before, marked, after, ...newContent];
-        }
-      });
-      return newContent;
-    });
-  }, [markups]);
+  const finishMarkup = useCallback(() => {}, []);
 
-  console.log({ content });
+  useEffect(() => {
+    if (!relatedContents) {
+      return;
+    }
+    if (hasConflict) {
+      return;
+    }
+    if (!dealWithConflict) {
+      return;
+    }
+    if (confirm) {
+      finishMarkup();
+    }
+  }, [confirm, dealWithConflict, finishMarkup, hasConflict, relatedContents]);
 
   return (
-    <Main
-      onClick={() =>
-        getSelection()?.type !== 'Range' && setButtonPosition(initPosition)
-      }
-    >
-      <Article onMouseDown={() => setShowLorem(true)} onMouseUp={handleMouseUp}>
-        {showLorem ? lorem : content}
+    <Main>
+      <Article>
+        {contents.map((item, index) => (
+          <span
+            key={index}
+            style={{ color: item.color }}
+            onMouseDown={() => setMarkupStart(index)}
+            onMouseUp={() => handleMarkup(index)}
+          >
+            {item.content}
+          </span>
+        ))}
       </Article>
-      {buttonPosition.show && (
-        <MarkupButton
-          top={buttonPosition.top}
-          left={buttonPosition.left}
-          onClick={handleMark}
-        >
-          Mark
-        </MarkupButton>
-      )}
-      {showSelection && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <div>
-            <button>prev</button>
-            <button>new</button>
-            <button>combine</button>
-          </div>
-        </div>
+      {hasConflict && (
+        <OptionMask>
+          <Option>
+            <button onClick={() => handleConflict('merge')}>合併</button>
+            <button onClick={() => handleConflict('keepNew')}>保留最新</button>
+            <button onClick={reset}>取消</button>
+          </Option>
+        </OptionMask>
       )}
     </Main>
   );
